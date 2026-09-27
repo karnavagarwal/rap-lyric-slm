@@ -1,0 +1,11 @@
+# Ignore massive datasets and binary streams
+*.csv
+*.bin
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore virtual environments
+venv/
+env/ss
