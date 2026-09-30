@@ -1,6 +1,7 @@
 # Ignore massive datasets and binary streams
 *.csv
 *.bin
+*.pt
 
 # Ignore Python cache
 __pycache__/
