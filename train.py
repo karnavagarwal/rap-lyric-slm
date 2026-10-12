@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from torch.nn import functional as F
 from model import RapModel
+import os
 
 batch_size = 16
 block_size = 1024
@@ -25,11 +26,18 @@ def get_batch():
 
 if __name__ == "__main__":
     print(f'Loading model to {device}...')
-
     model = RapModel().to(device)
+    
+    # Initialize optimizer OUTSIDE the if-statement so it always exists
     optimizer = torch.optim.AdamW(model.parameters(), lr = learning_rate)
 
-    print('Starting training sanity check...')
+    checkpoint_path = "rap_model_checkpoint.pt"
+    if os.path.exists(checkpoint_path):
+        print("Resuming from checkpoint...")
+        checkpoint = torch.load(checkpoint_path)
+        model.load_state_dict(checkpoint)
+
+    print('Starting training...')
 
     for iter in range(max_iters):
         X, Y = get_batch()
@@ -49,6 +57,7 @@ if __name__ == "__main__":
             torch.save(model.state_dict(), 'rap_model_checkpoint.pt')
             print(f"-- Checkpoint saved at step {iter} --")
 
+    
     print('Training complete!!!')
     torch.save(model.state_dict(), 'rap_model_checkpoint.pt')
     print("Final model has been saved!!")

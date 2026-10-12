@@ -1,5 +1,7 @@
 # Rap Lyric Generation SLM
-
+1.7 million rap songs
+700M + tokens
+131,922,432 parameters
 ## Overview
 This repository contains the architecture and training pipeline for a Small Language Model (SLM) designed for rap lyric generation. Built entirely from scratch in PyTorch, the model implements a GPT-2 style decoder-only Transformer architecture.
 
@@ -8,7 +10,7 @@ This repository contains the architecture and training pipeline for a Small Lang
 ## Project Workflow & Pipeline
 
 **1. Data Acquisition & Preprocessing**
-* **1.a.** The raw data for this project was downloaded from Kaggle: [Link to be inserted].
+* **1.a.** The raw data for this project was downloaded from Kaggle, Genuis Song Lyrics: (https://www.kaggle.com/datasets/carlosgdcj/genius-song-lyrics-with-language-information).
 * **1.b.** This data was then cleaned through basic Python scripts, which firstly isolated the rap songs, and then extracted only the lyrics column.
 * **1.c.** The resulting cleaned text was aggregated and normalized into a single 2.1GB CSV file (`rap_lyrics_normalized.csv`).
 
