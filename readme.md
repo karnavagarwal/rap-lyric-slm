@@ -1,33 +1,119 @@
 # Rap Lyric Generation SLM
-1.7 million rap songs
-700M + tokens
-131,922,432 parameters
-## Overview
-This repository contains the architecture and training pipeline for a Small Language Model (SLM) designed for rap lyric generation. Built entirely from scratch in PyTorch, the model implements a GPT-2 style decoder-only Transformer architecture.
 
-**Author:** Karnav Agarwal
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/karnavagarwal/rap-lyric-slm/blob/main/demo.ipynb)
+![Parameters](https://img.shields.io/badge/Parameters-131M-blue)
+![Tokens](https://img.shields.io/badge/Tokens-700M%2B-orange)
+![Framework](https://img.shields.io/badge/PyTorch-2.0%2B-red)
 
-## Project Workflow & Pipeline
+A 131M-parameter decoder-only Small Language Model (SLM) trained from scratch in PyTorch for multi-syllable rap lyric generation. The model implements a GPT-2 style Transformer architecture trained on over 700M tokens extracted from a curated corpus of 1.7M rap songs.
 
-**1. Data Acquisition & Preprocessing**
-* **1.a.** The raw data for this project was downloaded from Kaggle, Genuis Song Lyrics: (https://www.kaggle.com/datasets/carlosgdcj/genius-song-lyrics-with-language-information).
-* **1.b.** This data was then cleaned through basic Python scripts, which firstly isolated the rap songs, and then extracted only the lyrics column.
-* **1.c.** The resulting cleaned text was aggregated and normalized into a single 2.1GB CSV file (`rap_lyrics_normalized.csv`).
+---
 
-**2. Tokenization Strategy**
-* **2.a.** A custom Byte-Pair Encoding (BPE) tokenizer was trained from scratch on the corpus using a dedicated script (`train_tokenizer.py`).
-* **2.b.** The vocabulary size was strictly capped at 30,000 unique tokens to optimally balance compression while preserving the rap-specific language data.
-* **2.c.** The final vocabulary and merge rules were exported and saved as `rap_tokenizer.json`.
+## Model Specifications
 
-**3. Data Serialization for Memory Efficiency**
-* **3.a.** The entire 2.1GB text corpus was processed through the BPE tokenizer (`prepare_data.py`), yielding a sequence of over 700 million token IDs.
-* **3.b.** To bypass system RAM limitations during training, these token IDs were serialized and saved to disk as a flat, 16-bit integer binary file (`train_data.bin`).
-* **3.c.** This binary format enables high-throughput, memory-mapped (`np.memmap`) data loading, allowing the hardware to scoop out exact batch chunks dynamically without loading the massive dataset into memory.
+| Parameter | Specification |
+| :--- | :--- |
+| **Architecture** | GPT-2 Style Decoder-Only Transformer |
+| **Total Parameters** | 131,922,432 (~131M) |
+| **Layers / Transformer Blocks** | 12 |
+| **Hidden Dimension ($d_{\text{model}}$)** | 768 |
+| **Attention Heads** | 12 (64 dimensions per head) |
+| **Context Window ($T$)** | 1024 tokens |
+| **Activation Function** | GELU |
+| **Normalization** | Pre-Layer Normalization (`LayerNorm`) with residual connections |
+| **Vocabulary Size** | 30,000 (Custom BPE) |
+| **Training Steps** | 128,000 steps |
 
-**4. Architecture Engineering (Model Construction)**
-* **4.a.** A complete GPT-2 style Transformer architecture was coded from scratch in PyTorch (`model.py`), featuring a 1024-token context window and a 768 embedding dimension.
-* **4.b.** The network backbone stacks 12 sequential Transformer blocks.
-* **4.c.** Each block incorporates Multi-Head Causal Self-Attention (sliced into 12 heads of 64 dimensions, utilizing a persistent lower-triangular causal mask and hardware-optimized QKV generation).
-* **4.d.** The attention mechanisms are paired with GELU-activated MLPs. Pre-Layer Normalization and residual bypass connections are integrated throughout to stabilize deep mathematical operations.
+---
 
-**This documents the work done till date.**
+## Technical Pipeline
+
+### 1. Data Ingestion & Preprocessing
+- **Source Corpus:** Extracted from the [Genius Song Lyrics Dataset](https://www.kaggle.com/datasets/carlosgdcj/genius-song-lyrics-with-language-information) on Kaggle (~5.1M songs).
+- **Filtering:** Isolated roughly 1.7M English rap songs based on genre tags and metadata.
+- **Normalization:** Lyrics were cleaned, stripped of corrupted metadata/non-lyrical tags, and consolidated into a standardized 2.1 GB CSV file (`rap_lyrics_normalized.csv`).
+
+### 2. Tokenization
+- Trained a custom Byte-Pair Encoding (BPE) tokenizer from scratch (`train_tokenizer.py`) using the Hugging Face `tokenizers` library.
+- Capped vocabulary size at **30,000 tokens** to balance sequence compression against subword granularity, preserving slang, cadence markers, and rhyme patterns.
+- Serialized merge rules and vocab directly to `rap_tokenizer.json`.
+
+### 3. High-Throughput Binary Serialization
+- Converted the entire 700M+ token corpus into raw unsigned 16-bit integers (`uint16`) using `prepare_data.py`, writing to a flat binary file (`train_data.bin`).
+- Training utilizes NumPy memory mapping (`np.memmap`) to stream batches directly from disk, completely bypassing host RAM bottlenecks and enabling near-zero I/O overhead.
+
+### 4. Architecture Implementation
+- Implemented from scratch in PyTorch (`model.py`):
+  - **Causal Self-Attention:** Hardware-efficient projection combining Query, Key, and Value ($QKV$) operations into a single matrix multiplication, masked with a lower-triangular causal attention buffer.
+  - **Feed-Forward Blocks:** Two-stage linear expansion ($768 \rightarrow 3072 \rightarrow 768$) with GELU activations.
+  - **Pre-LN Structure:** LayerNorm applied prior to attention and MLP blocks, wrapped with residual skip connections to ensure gradient propagation across 12 layers.
+
+### 5. Training & Optimization
+- **Infrastructure:** Remote cloud GPU instances (Vast.ai).
+- **Schedule:** 128,000 optimization steps utilizing AdamW with weight decay and learning rate warm-up/decay schedules.
+- **Checkpointing:** State dicts periodically serialized and validated against loss convergence, with the final weights released under `rap_model_checkpoint.pt`.
+
+### 6. Inference & Interactive Deployment
+- **Dynamic Sampling:** Custom sampling loop (`generate.py`) supporting:
+  - Scaled temperature tuning.
+  - Top-$k$ filtering.
+  - Token-level repetition penalty across a rolling context window to prevent generative looping.
+- **Streaming Web UI:** Gradio application (`app.py`) providing a token-by-token streaming interface.
+- **Zero-Setup Demo:** Integrated via `demo.ipynb` for one-click interactive execution on Google Colab.
+
+---
+
+## Repository Structure
+
+```text
+├── app.py                     # Gradio web UI application with streaming
+├── generate.py                # Sampling engine (top-k, temperature, repetition penalty)
+├── model.py                   # Custom PyTorch GPT-2 architecture
+├── rap_tokenizer.json         # 30,000-vocabulary BPE tokenizer config
+├── demo.ipynb                 # Interactive Google Colab notebook
+└── README.md
+```
+
+> **Note:** Model weights (`rap_model_checkpoint.pt`, ~500 MB) are hosted on [GitHub Releases](https://github.com/karnavagarwal/rap-lyric-slm/releases/tag/ModelRelease).
+
+---
+
+## Quickstart
+
+### 1. Interactive Demo (No Local Setup)
+Click the badge at the top of the README to launch the pre-configured [Google Colab Notebook](https://github.com/karnavagarwal/rap-lyric-slm/blob/main/demo.ipynb).
+
+### 2. Local Installation & Inference
+
+1. **Clone the repository:**
+   ```bash
+   git clone [https://github.com/karnavagarwal/rap-lyric-slm.git](https://github.com/karnavagarwal/rap-lyric-slm.git)
+   cd rap-lyric-slm
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   pip install torch gradio tokenizers
+   ```
+
+3. **Download model weights:**
+   Download `rap_model_checkpoint.pt` from the [Model Release page](https://github.com/karnavagarwal/rap-lyric-slm/releases/download/ModelRelease/rap_model_checkpoint.pt) and place it in the project root:
+   ```bash
+   wget [https://github.com/karnavagarwal/rap-lyric-slm/releases/download/ModelRelease/rap_model_checkpoint.pt](https://github.com/karnavagarwal/rap-lyric-slm/releases/download/ModelRelease/rap_model_checkpoint.pt)
+   ```
+
+4. **Launch the web interface:**
+   ```bash
+   python app.py
+   ```
+
+5. **Terminal generation (optional):**
+   ```bash
+   python generate.py
+   ```
+
+---
+
+## Author
+**Karnav Agarwal**  
+Indian Institute of Technology Gandhinagar (IITGN)
